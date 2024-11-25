@@ -1,0 +1,35 @@
+pipeline {
+    agent any
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+        stage('Build Docker Image') {
+            steps {
+                sh 'docker build -t static-website:${env.BUILD_ID} .'
+            }
+        }
+        stage('Run Container') {
+            steps {
+                sh 'docker run -d -p 8081:80 static-website:${env.BUILD_ID}'
+            }
+        }
+        stage('Test Website') {
+            steps {
+                sh 'curl -I http://localhost:8081'
+            }
+        }
+        stage('Push Image to Docker Hub') {
+            steps {
+                sh '''
+                docker tag static-website:${env.BUILD_ID} <your-dockerhub-username>/static-website:develop-${env.BUILD_ID}
+                docker tag static-website:${env.BUILD_ID} <your-dockerhub-username>/static-website:latest
+                docker push <your-dockerhub-username>/static-website:develop-${env.BUILD_ID}
+                docker push <your-dockerhub-username>/static-website:latest
+                '''
+            }
+        }
+    }
+}

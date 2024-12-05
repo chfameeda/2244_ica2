@@ -1,56 +1,67 @@
 pipeline {
     agent any
+    environment {
+        // Set your Docker Hub username and repository name
+        DOCKERHUB_USERNAME = "your-dockerhub-username"   // Replace with your Docker Hub username
+        IMAGE_NAME = "static-website"                      // Docker image name
+        CONTAINER_NAME = "nostalgic_brahmagupta"          // Container name
+        HOST_PORT = "8081"                                // Port for the develop branch container
+        TEST_HOST = "3.145.9.207"                         // EC2 instance IP for testing
+    }
     stages {
-        stage('Cleanup') {
+        stage('Checkout') {
             steps {
-                cleanWs()
-            }
-        }
-
-        stage('Clone Git Repo') {
-            steps {
+                // Checkout the code from the develop branch
                 checkout scm
             }
         }
-        stage('Clone from repository') {
+        stage('Build Docker Image') {
             steps {
-                git url: 'https://github.com/JoAmal1/2244_ica2.git', branch: 'develop', credentialsId: 'GIT'
+                script {
+                    // Build the Docker image for the static website
+                    sh 'docker build -t ${DOCKERHUB_USERNAME}/${IMAGE_NAME}:latest .'
+                }
             }
         }
-
-        
-stage('Build and run docker image') {
+        stage('Run Container') {
             steps {
-                sh 'docker build -t joamal/myapp:latest .'
-                sh 'docker stop myapp || true && docker rm myapp || true'
-                sh "docker tag joamal/myapp:latest joamal/myapp:develop-${env.BUILD_ID}" 
-                sh 'docker run --name myapp -d -p 8081:80 joamal/myapp:latest'
-            } 
-        }
-
-
-        stage('Build and Push') {
-            steps {
-                echo 'Building..'
-                    withCredentials([usernamePassword(credentialsId: 'dockerhub-auth', usernameVariable: 'USERNAME', passwordVariable: 'PASSWORD')]) {
-                        sh '''
-                            docker login -u ${USERNAME} -p ${PASSWORD}
-                        '''
-                      
-                    }
+                script {
+                    // Run the container on port 8081
+                    sh 'docker run -d -p ${HOST_PORT}:80 --name ${CONTAINER_NAME} ${DOCKERHUB_USERNAME}/${IMAGE_NAME}:latest'
+                }
             }
         }
-        stage('testing') {
+        stage('Test Website') {
             steps {
-                sh 'curl -I 54.145.136.40:8080'
+                script {
+                    // Test if the website is accessible on port 8081
+                    sh 'curl -I ${TEST_HOST}:${HOST_PORT}'
+                }
             }
         }
-       stage('pushing') {
+        stage('Tag Docker Image') {
             steps {
-                  sh "docker push joamal/myapp:latest"
-                  sh "docker push joamal/myapp:develop-${env.BUILD_ID}"
+                script {
+                    // Tag the image with both 'latest' and 'develop-${env.BUILD_ID}'
+                    sh 'docker tag ${DOCKERHUB_USERNAME}/${IMAGE_NAME}:latest ${DOCKERHUB_USERNAME}/${IMAGE_NAME}:develop-${env.BUILD_ID}'
+                }
             }
         }
-    
+        stage('Push to Docker Hub') {
+            steps {
+                script {
+                    // Push both tagged images to Docker Hub
+                    sh 'docker push ${DOCKERHUB_USERNAME}/${IMAGE_NAME}:latest'
+                    sh 'docker push ${DOCKERHUB_USERNAME}/${IMAGE_NAME}:develop-${env.BUILD_ID}'
+                }
+            }
+        }
+    }
+    post {
+        always {
+            // Clean up the container after the build
+            sh 'docker rm -f ${CONTAINER_NAME}'
+        }
     }
 }
+

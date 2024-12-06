@@ -16,7 +16,7 @@ stage('Build and run docker image') {
       
         stage('testing') {
             steps {
-                sh 'curl -I 3.145.9.207:8082'
+                sh 'curl -I 3.145.9.207:8080'
             }
         }
       
